@@ -1,2 +1,6 @@
 # liquidhaskell-cabal
-Cabal build hook for Liquid Haskell
+
+Liquid Haskell integration for Cabal and Stack
+
+TODO: Documentation
+
