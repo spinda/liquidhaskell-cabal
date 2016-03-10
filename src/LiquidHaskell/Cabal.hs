@@ -56,7 +56,8 @@
 -- @Setup.hs@ files, so you will need to have @liquidhaskell-cabal@ manually
 -- installed before configuring/building your project. Using Cabal directly,
 -- this can be done with @cabal install liquidhaskell-cabal@. Using stack, you
--- can add @liquidhaskell-cabal@ to your @stack.yaml@'s @extra-deps@ field.
+-- can add @liquidhaskell-cabal-0.1.0.0@ to your @stack.yaml@'s @extra-deps@
+-- field.
 --
 -- Each component of the package (libary and executables) can specify its own
 -- extra command line flags to pass to LiquidHaskell (these are described in
