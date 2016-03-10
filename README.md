@@ -71,10 +71,28 @@ custom-setup
 ```
 
 Unfortunately Cabal &lt;1.24 has no means of tracking build dependencies for
-`Setup.hs` files, so you will need to have `liquidhaskell-cabal` manually
-installed before configuring/building your project. Using Cabal directly, this
-can be done with `cabal install liquidhaskell-cabal`. Using stack, you can add
-`liquidhaskell-cabal-0.1.0.0` to your `stack.yaml`'s `extra-deps` field.
+`Setup.hs` files. If you're using Cabal directly, you'll need to install
+`liquidhaskell-cabal` manually before configuring/building your project:
+
+```
+cabal install liquidhaskell-cabal
+```
+
+If you're using stack, add `liqudhaskell-cabal` to each of your components'
+`build-depends`, add `liquidhaskell-cabal-0.1.0.0` to your `stack.yaml`'s
+[`extra-deps` section](https://github.com/commercialhaskell/stack/blob/master/doc/yaml_configuration.md#extra-deps),
+and add an
+[`explicit-setup-deps`](https://github.com/commercialhaskell/stack/blob/master/doc/yaml_configuration.md#explicit-setup-deps)
+section to your `stack.yaml`:
+
+```
+explicit-setup-deps:
+  "*": true
+extra-deps:
+- liquidhaskell-cabal-0.1.0.0
+```
+
+Then you can build your project as you normally would with stack.
 
 Each component of the package (libary and executables) can specify its own
 extra command line flags to pass to LiquidHaskell (these are described in the
