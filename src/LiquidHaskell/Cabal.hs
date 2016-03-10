@@ -12,6 +12,7 @@ import Data.Maybe
 
 import Distribution.ModuleName hiding (main)
 import Distribution.PackageDescription
+import Distribution.PackageDescription.Parse
 import Distribution.ParseUtils
 import Distribution.Simple
 import Distribution.Simple.GHC
@@ -36,8 +37,9 @@ liquidHaskellHooks :: UserHooks
 liquidHaskellHooks = simpleUserHooks { postBuild = liquidHaskellPostBuildHook }
 
 liquidHaskellPostBuildHook :: Args -> BuildFlags -> PackageDescription -> LocalBuildInfo -> IO ()
-liquidHaskellPostBuildHook args flags pkg lbi =
-  when (isFlagEnabled "liquidhaskell" lbi) $ do
+liquidHaskellPostBuildHook args flags pkg lbi = do
+  enabled <- isFlagEnabled "liquidhaskell" lbi
+  when enabled $ do
     let verbosity = fromFlag $ buildVerbosity flags
     withAllComponentsInBuildOrder pkg lbi $ \component clbi ->
       case component of
@@ -111,14 +113,30 @@ liquidProgram :: Program
 liquidProgram = simpleProgram "liquid"
 
 --------------------------------------------------------------------------------
--- Cabal Utility Functions -----------------------------------------------------
+-- Cabal Flag Handling ---------------------------------------------------------
 --------------------------------------------------------------------------------
 
-isFlagEnabled :: String -> LocalBuildInfo -> Bool
-isFlagEnabled name lbi = FlagName name `elem` enabledFlags
+isFlagEnabled :: String -> LocalBuildInfo -> IO Bool
+isFlagEnabled name lbi = case getOverriddenFlagValue name lbi of
+  Just enabled -> return enabled
+  Nothing -> getDefaultFlagValue name lbi False
+
+getOverriddenFlagValue :: String -> LocalBuildInfo -> Maybe Bool
+getOverriddenFlagValue name lbi = lookup (FlagName name) overriddenFlags
   where
-    enabledFlags = map fst $ filter snd allFlags
-    allFlags = configConfigurationsFlags $ configFlags lbi
+    overriddenFlags = configConfigurationsFlags $ configFlags lbi
+
+getDefaultFlagValue :: String -> LocalBuildInfo -> Bool -> IO Bool
+getDefaultFlagValue name lbi def = case pkgDescrFile lbi of
+  Nothing -> return def
+  Just cabalFile -> do
+    descr <- readPackageDescription silent cabalFile
+    let flag = find ((FlagName name ==) . flagName) $ genPackageFlags descr
+    return $ maybe def flagDefault flag
+
+--------------------------------------------------------------------------------
+-- Splitting Command Line Arguments --------------------------------------------
+--------------------------------------------------------------------------------
 
 parseCommandArgs :: String -> Either String [ProgArg]
 parseCommandArgs cmd =
