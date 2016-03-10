@@ -33,7 +33,7 @@
 -- enabled and, if it is, will run the LiquidHaskell binary with the
 -- appropriate command line arguments and your package's source files. This
 -- assumes, of course, that the LiquidHaskell binary is installed and available
--- in @$PATH@.
+-- in @$PATH@ (please make sure you have the latest stable version installed).
 --
 -- Via stack, this flag can be enabled on the fly with
 -- @--flag <project name>:liquidhaskell@; for example:
