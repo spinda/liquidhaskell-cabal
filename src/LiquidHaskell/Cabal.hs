@@ -1,5 +1,99 @@
+-- | This module provides a kit to create @Setup.hs@ files with LiquidHaskell
+-- integration. A sample project configured with this package
+-- <https://github.com/spinda/liquidhaskell-cabal-demo is available>.
+--
+-- The standard, basic @Setup.hs@ configuration looks like this:
+--
+-- > import Distribution.Simple
+-- > main = defaultMain
+--
+-- A simple @Setup.hs@ file that performs the standard behavior, with the
+-- addition of LiquidHaskell support, can look like the following:
+--
+-- > import LiquidHaskell.Cabal
+-- > main = liquidHaskellMain
+--
+-- In order for Cabal/stack to properly execute your custom @Setup.hs@ file,
+-- your package's @.cabal@ file will need to set the @build-type@ to @Custom@
+-- (the default is @Simple@):
+--
+-- > build-type: Custom
+--
+-- A package with LiquidHaskell integration is expected to expose a flag called
+-- @liquidhaskell@, which should normally default to disabled and can be
+-- implemented by adding the following stanza to your project's @.cabal@ file:
+--
+-- > flag liquidhaskell
+-- >   description: After building, verify with LiquidHaskell
+-- >   default:     False
+--
+-- (The spacing and description are arbitrary and open to customization.)
+--
+-- During the post-build phase, the hook will check whether this flag is
+-- enabled and, if it is, will run the LiquidHaskell binary with the
+-- appropriate command line arguments and your package's source files. This
+-- assumes, of course, that the LiquidHaskell binary is installed and available
+-- in @$PATH@.
+--
+-- Via stack, this flag can be enabled on the fly with
+-- @--flag <project name>:liquidhaskell@; for example:
+--
+-- > stack build --flag myproject:liquidhaskell
+--
+-- Running @cabal-install@ directly, it will need to be enabled via @cabal
+-- configure@:
+--
+-- > cabal configure -fliquidhaskell && cabal build
+--
+-- When Cabal 1.24 releases, you will be able to add a stanza like the
+-- following to your @.cabal@ file to ensure @liquidhaskell-cabal@ is installed
+-- and available when the @Setup.hs@ file is built:
+--
+-- > custom-setup
+-- >   setup-depends: base, Cabal, liquidhaskell-cabal
+--
+-- Unfortunately Cabal <1.24 has no means of tracking build dependencies for
+-- @Setup.hs@ files, so you will need to have @liquidhaskell-cabal@ manually
+-- installed before configuring/building your project. Using Cabal directly,
+-- this can be done with @cabal install liquidhaskell-cabal@. Using stack, you
+-- can add @liquidhaskell-cabal@ to your @stack.yaml@'s @extra-deps@ field.
+--
+-- Each component of the package (libary and executables) can specify its own
+-- extra command line flags to pass to LiquidHaskell (these are described in
+-- the <https://github.com/ucsd-progsys/liquidhaskell LiquidHaskell README>).
+-- Simply add an @x-liquidhaskell-options@ field to the relevant components:
+--
+-- > library
+-- >   (... other fields ...)
+-- >   x-liquidhaskell-options: --diff --no-termination
+--
+-- > executable myexecutable
+-- >   (... other fields ...)
+-- >   x-liquidhaskell-options: --diff
+--
+-- For most projects, the simple sample @Setup.hs@ file given above, using
+-- 'liquidHaskellMain', should be sufficient. However, for those already using
+-- custom @Setup.hs@ files, @liquidhaskell-cabal@ exposes more granular means
+-- of invoking the hook. Using 'liquidHaskellHooks', the basic @Setup.hs@ file
+-- is equivalent to:
+--
+-- > import Distribution.Simple
+-- > import LiquidHaskell.Cabal
+-- > main = defaultMainWithHooks liquidHaskellHooks
+--
+-- Using 'liquidHaskellPostBuildHook', this is further equivalent to:
+--
+-- > import Distribution.Simple
+-- > import LiquidHaskell.Cabal
+-- > main = defaultMainWithHooks $
+-- >   simpleUserHooks { postBuild = liquidHaskellPostBuildHook }
+--
+-- Projects already using a @postBuild@ hook can invoke
+-- 'liquidHaskellPostBuildHook' from within this existing hook where
+-- appropriate.
+
 module LiquidHaskell.Cabal (
-  -- * Setup.hs Hooks Kit
+    -- * Setup.hs Hooks Kit
     liquidHaskellMain
   , liquidHaskellHooks
   , liquidHaskellPostBuildHook
@@ -30,22 +124,57 @@ import System.FilePath
 -- Setup.hs Hooks Kit ----------------------------------------------------------
 --------------------------------------------------------------------------------
 
+-- | The simplest method of incorporating LiquidHaskell into a @Setup.hs@ file.
+--
+-- > import LiquidHaskell.Cabal
+-- > main = liquidHaskellMain
+--
+-- This is equivalent to:
+--
+-- > import Distribution.Simple
+-- > import LiquidHaskell.Cabal
+-- > main = defaultMainWithHooks liquidHaskellHooks
 liquidHaskellMain :: IO ()
 liquidHaskellMain = defaultMainWithHooks liquidHaskellHooks
 
+-- | Cabal's 'simpleUserHooks' configured with 'liquidHaskellPostBuildHook' in
+-- the 'postBuild' field. Can be customized with your project's own user hooks.
+--
+-- > import Distribution.Simple
+-- > import LiquidHaskell.Cabal
+-- > main = defaultMainWithHooks liquidHaskellHooks
+--
+-- This is equivalent to:
+--
+-- > import Distribution.Simple
+-- > import LiquidHaskell.Cabal
+-- > main = defaultMainWithHooks $
+-- >   simpleUserHooks { postBuild = liquidHaskellPostBuildHook }
 liquidHaskellHooks :: UserHooks
 liquidHaskellHooks = simpleUserHooks { postBuild = liquidHaskellPostBuildHook }
 
-liquidHaskellPostBuildHook :: Args -> BuildFlags -> PackageDescription -> LocalBuildInfo -> IO ()
+-- | The raw build hook, checking the @liquidhaskell@ flag and executing the
+-- LiquidHaskell binary with appropriate arguments when enabled. Can be hooked
+-- into a 'UserHooks' map or invoked from within your own custom 'postBuild'
+-- hook.
+--
+-- > import Distribution.Simple
+-- > import LiquidHaskell.Cabal
+-- > main = defaultMainWithHooks $
+-- >   simpleUserHooks { postBuild = liquidHaskellPostBuildHook }
+liquidHaskellPostBuildHook :: Args -> BuildFlags -> PackageDescription
+                           -> LocalBuildInfo -> IO ()
 liquidHaskellPostBuildHook args flags pkg lbi = do
   enabled <- isFlagEnabled "liquidhaskell" lbi
   when enabled $ do
     let verbosity = fromFlag $ buildVerbosity flags
     withAllComponentsInBuildOrder pkg lbi $ \component clbi ->
       case component of
-        CLib lib -> verifyComponent verbosity lbi clbi (libBuildInfo lib) "library"
+        CLib lib -> verifyComponent verbosity lbi clbi (libBuildInfo lib)
+                    "library"
                       =<< findLibSources lib
-        CExe exe -> verifyComponent verbosity lbi clbi (buildInfo exe) ("executable " ++ exeName exe)
+        CExe exe -> verifyComponent verbosity lbi clbi (buildInfo exe)
+                    ("executable " ++ exeName exe)
                       =<< findExeSources exe
         _ -> return ()
 
@@ -53,7 +182,8 @@ liquidHaskellPostBuildHook args flags pkg lbi = do
 -- Verify a Library or Executable Component ------------------------------------
 --------------------------------------------------------------------------------
 
-verifyComponent :: Verbosity -> LocalBuildInfo -> ComponentLocalBuildInfo -> BuildInfo -> String -> [FilePath] -> IO ()
+verifyComponent :: Verbosity -> LocalBuildInfo -> ComponentLocalBuildInfo
+                -> BuildInfo -> String -> [FilePath] -> IO ()
 verifyComponent verbosity lbi clbi bi desc sources = do
   userArgs <- getUserArgs desc bi
   let ghcFlags = renderGhcOptions (compiler lbi) $
