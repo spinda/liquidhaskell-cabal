@@ -96,7 +96,7 @@ Then you can build your project as you normally would with stack.
 
 Each component of the package (libary and executables) can specify its own
 extra command line flags to pass to LiquidHaskell (these are described in the
-[LiquidHaskell README](https://github.com/ucsd-progsys/liquidhaskell). Simply
+[LiquidHaskell README](https://github.com/ucsd-progsys/liquidhaskell)). Simply
 add an `x-liquidhaskell-options` field to the relevant components:
 
 ```
