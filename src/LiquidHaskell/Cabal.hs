@@ -21,7 +21,7 @@
 --
 -- A package with LiquidHaskell integration is expected to expose a flag called
 -- @liquidhaskell@, which should normally default to disabled and can be
--- implemented by adding the following stanza to your project's @.cabal@ file:
+-- implemented by adding the following stanza to your package's @.cabal@ file:
 --
 -- > flag liquidhaskell
 -- >   description: After building, verify with LiquidHaskell
@@ -36,9 +36,9 @@
 -- in @$PATH@ (please make sure you have the latest stable version installed).
 --
 -- Via stack, this flag can be enabled on the fly with
--- @--flag <project name>:liquidhaskell@; for example:
+-- @--flag <package name>:liquidhaskell@; for example:
 --
--- > stack build --flag myproject:liquidhaskell
+-- > stack build --flag mypackage:liquidhaskell
 --
 -- Running @cabal-install@ directly, it will need to be enabled via @cabal
 -- configure@:
