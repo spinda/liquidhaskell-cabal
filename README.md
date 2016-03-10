@@ -1,6 +1,9 @@
 # liquidhaskell-cabal
 
-Liquid Haskell integration for Cabal and stack.
+*Liquid Haskell integration for Cabal and stack.*
+
+[![Hackage](https://img.shields.io/hackage/v/liquidhaskell-cabal.svg)](https://hackage.haskell.org/package/liquidhaskell-cabal)
+[![Hackage-Deps](https://img.shields.io/hackage-deps/v/liquidhaskell-cabal.svg)](http://packdeps.haskellers.com/feed?needle=liquidhaskell-cabal)
 
 The `LiquidHaskell.Cabal` module provides a kit to create `Setup.hs` files with
 LiquidHaskell integration. A sample project configured with this package
