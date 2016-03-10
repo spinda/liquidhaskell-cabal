@@ -11,7 +11,7 @@ bug-reports:           https://github.com/spinda/liquidhaskell-cabal/issues
 license:               BSD3
 license-file:          LICENSE
 author:                Michael Smith
-maintainer:            michael@spinda.net
+maintainer:            Michael Smith <michael@spinda.net>
 copyright:             2016 Michael Smith
 category:              Development
 build-type:            Simple
