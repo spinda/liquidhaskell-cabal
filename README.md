@@ -48,7 +48,7 @@ During the post-build phase, the hook will check whether this flag is enabled
 and, if it is, will run the LiquidHaskell binary with the appropriate command
 line arguments and your package's source files. This assumes, of course, that
 the LiquidHaskell binary is installed and available in `$PATH` (please make
-sure you have the latest stable version installed).
+sure you have a version >= 0.6.0.0 installed).
 
 Via stack, this flag can be enabled on the fly with
 `--flag <package name>:liquidhaskell`; for example:
