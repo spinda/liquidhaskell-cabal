@@ -1,109 +1,8 @@
--- | This module provides a kit to create @Setup.hs@ files with LiquidHaskell
--- integration. A sample project configured with this package
--- <https://github.com/spinda/liquidhaskell-cabal-demo is available>.
---
--- The standard, basic @Setup.hs@ configuration looks like this:
---
--- > import Distribution.Simple
--- > main = defaultMain
---
--- A simple @Setup.hs@ file that performs the standard behavior, with the
--- addition of LiquidHaskell support, can look like the following:
---
--- > import LiquidHaskell.Cabal
--- > main = liquidHaskellMain
---
--- In order for Cabal/stack to properly execute your custom @Setup.hs@ file,
--- your package's @.cabal@ file will need to set the @build-type@ to @Custom@
--- (the default is @Simple@):
---
--- > build-type: Custom
---
--- A package with LiquidHaskell integration is expected to expose a flag called
--- @liquidhaskell@, which should normally default to disabled and can be
--- implemented by adding the following stanza to your package's @.cabal@ file:
---
--- > flag liquidhaskell
--- >   description: After building, verify with LiquidHaskell
--- >   default:     False
---
--- (The spacing and description are arbitrary and open to customization.)
---
--- During the post-build phase, the hook will check whether this flag is
--- enabled and, if it is, will run the LiquidHaskell binary with the
--- appropriate command line arguments and your package's source files. This
--- assumes, of course, that the LiquidHaskell binary is installed and available
--- in @$PATH@ (please make sure you have a version >= 0.6.0.0 installed).
---
--- Via stack, this flag can be enabled on the fly with
--- @--flag <package name>:liquidhaskell@; for example:
---
--- > stack build --flag mypackage:liquidhaskell
---
--- Running @cabal-install@ directly, it will need to be enabled via @cabal
--- configure@:
---
--- > cabal configure -fliquidhaskell && cabal build
---
--- When Cabal 1.24 releases, you will be able to add a stanza like the
--- following to your @.cabal@ file to ensure @liquidhaskell-cabal@ is installed
--- and available when the @Setup.hs@ file is built:
---
--- > custom-setup
--- >   setup-depends: base, Cabal, liquidhaskell-cabal
---
--- Unfortunately Cabal <1.24 has no means of tracking build dependencies for
--- @Setup.hs@ files. If you're using Cabal directly, you'll need to install
--- @liquidhaskell-cabal@ manually before configuring/building your project:
---
--- > cabal install liquidhaskell-cabal
---
--- If you're using stack, add @liquidhaskell-cabal@ to each of your components'
--- @build-depends@, add @liquidhaskell-cabal-0.1.0.0@ to your @stack.yaml@'s
--- <https://github.com/commercialhaskell/stack/blob/master/doc/yaml_configuration.md#extra-deps extra-deps section>,
--- and add an
--- <https://github.com/commercialhaskell/stack/blob/master/doc/yaml_configuration.md#explicit-setup-deps explicit-setup-deps section> to your @stack.yaml@:
---
--- > explicit-setup-deps:
--- >   "*": true
--- > extra-deps:
--- > - liquidhaskell-cabal-0.1.0.0
---
--- Then you can build your project as you normally would with stack.
---
--- Each component of the package (library and executables) can specify its own
--- extra command line flags to pass to LiquidHaskell (these are described in
--- the <https://github.com/ucsd-progsys/liquidhaskell LiquidHaskell README>).
--- Simply add an @x-liquidhaskell-options@ field to the relevant components:
---
--- > library
--- >   (... other fields ...)
--- >   x-liquidhaskell-options: --diff --no-termination
---
--- > executable myexecutable
--- >   (... other fields ...)
--- >   x-liquidhaskell-options: --diff
---
--- For most projects, the simple sample @Setup.hs@ file given above, using
--- 'liquidHaskellMain', should be sufficient. However, for those already using
--- custom @Setup.hs@ files, @liquidhaskell-cabal@ exposes more granular means
--- of invoking the hook. Using 'liquidHaskellHooks', the basic @Setup.hs@ file
--- is equivalent to:
---
--- > import Distribution.Simple
--- > import LiquidHaskell.Cabal
--- > main = defaultMainWithHooks liquidHaskellHooks
---
--- Using 'liquidHaskellPostBuildHook', this is further equivalent to:
---
--- > import Distribution.Simple
--- > import LiquidHaskell.Cabal
--- > main = defaultMainWithHooks $
--- >   simpleUserHooks { postBuild = liquidHaskellPostBuildHook }
---
--- Projects already using a @postBuild@ hook can invoke
--- 'liquidHaskellPostBuildHook' from within this existing hook where
--- appropriate.
+-- | Please see the
+-- <https://github.com/spinda/liquidhaskell-cabal/blob/0.1.1.0/README.md README>
+-- for setup and usage instructions.
+
+{-# LANGUAGE CPP #-}
 
 module LiquidHaskell.Cabal (
     -- * Setup.hs Hooks Kit
@@ -116,6 +15,7 @@ import Control.Monad
 
 import Data.List
 import Data.Maybe
+import Data.Monoid
 
 import Distribution.ModuleName hiding (main)
 import Distribution.PackageDescription
@@ -199,8 +99,7 @@ verifyComponent :: Verbosity -> LocalBuildInfo -> ComponentLocalBuildInfo
                 -> BuildInfo -> String -> [FilePath] -> IO ()
 verifyComponent verbosity lbi clbi bi desc sources = do
   userArgs <- getUserArgs desc bi
-  let ghcFlags = renderGhcOptions (compiler lbi) $
-        componentGhcOptions verbosity lbi bi clbi $ buildDir lbi
+  let ghcFlags = makeGhcFlags verbosity lbi clbi bi
   let args = concat
         [ ("--ghc-option=" ++) <$> ghcFlags
         , ("--c-files=" ++) <$> (cSources bi)
@@ -219,6 +118,88 @@ getUserArgs desc bi =
         Right args -> return args
         Left err -> die $
           "failed to parse LiquidHaskell options for " ++ desc ++ ": " ++ err
+
+--------------------------------------------------------------------------------
+-- Construct GHC Options -------------------------------------------------------
+--------------------------------------------------------------------------------
+
+makeGhcFlags :: Verbosity -> LocalBuildInfo -> ComponentLocalBuildInfo
+             -> BuildInfo -> [String]
+makeGhcFlags verbosity lbi clbi bi =
+  renderGhcOptions (compiler lbi) $
+  sanitizeGhcOptions $
+  componentGhcOptions verbosity lbi bi clbi $ buildDir lbi
+
+-- Whitelist which GHC options get passed along to LiquidHaskell.
+-- (see issue #2)
+sanitizeGhcOptions :: GhcOptions -> GhcOptions
+sanitizeGhcOptions opts = GhcOptions
+  { ghcOptMode               = ghcOptMode               opts
+  , ghcOptExtra              = ghcOptExtra              opts
+  , ghcOptExtraDefault       = ghcOptExtraDefault       opts
+  , ghcOptInputFiles         = ghcOptInputFiles         opts
+  , ghcOptInputModules       = ghcOptInputModules       opts
+  , ghcOptOutputFile         = ghcOptOutputFile         opts
+  , ghcOptOutputDynFile      = ghcOptOutputDynFile      opts
+  , ghcOptSourcePathClear    = ghcOptSourcePathClear    opts
+  , ghcOptSourcePath         = ghcOptSourcePath         opts
+#if MIN_VERSION_Cabal(1,22,0)
+  , ghcOptPackageKey         = ghcOptPackageKey         opts
+#else
+  , ghcOptPackageName        = ghcOptPackageName        opts
+#endif
+  , ghcOptPackageDBs         = ghcOptPackageDBs         opts
+  , ghcOptPackages           = ghcOptPackages           opts
+  , ghcOptHideAllPackages    = ghcOptHideAllPackages    opts
+  , ghcOptNoAutoLinkPackages = ghcOptNoAutoLinkPackages opts
+#if MIN_VERSION_Cabal(1,22,0)
+  , ghcOptSigOf              = ghcOptSigOf              opts
+#endif
+  , ghcOptLinkLibs           = ghcOptLinkLibs           opts
+  , ghcOptLinkLibPath        = ghcOptLinkLibPath        opts
+  , ghcOptLinkOptions        = ghcOptLinkOptions        opts
+  , ghcOptLinkFrameworks     = ghcOptLinkFrameworks     opts
+  , ghcOptNoLink             = NoFlag -- LH uses LinkInMemory
+  , ghcOptLinkNoHsMain       = ghcOptLinkNoHsMain       opts
+  , ghcOptCcOptions          = ghcOptCcOptions          opts
+  , ghcOptCppOptions         = ghcOptCppOptions         opts
+  , ghcOptCppIncludePath     = ghcOptCppIncludePath     opts
+  , ghcOptCppIncludes        = ghcOptCppIncludes        opts
+  , ghcOptFfiIncludes        = ghcOptFfiIncludes        opts
+  , ghcOptLanguage           = ghcOptLanguage           opts
+  , ghcOptExtensions         = ghcOptExtensions         opts
+  , ghcOptExtensionMap       = ghcOptExtensionMap       opts
+  , ghcOptOptimisation       = NoFlag -- conflicts with interactive mode GHC
+#if MIN_VERSION_Cabal(1,22,0)
+  , ghcOptDebugInfo          = ghcOptDebugInfo          opts
+#endif
+  , ghcOptProfilingMode      = NoFlag -- LH sets its own profiling mode
+  , ghcOptSplitObjs          = ghcOptSplitObjs          opts
+#if MIN_VERSION_Cabal(1,20,0)
+  , ghcOptNumJobs            = NoFlag -- not relevant for LH
+#endif
+#if MIN_VERSION_Cabal(1,22,0)
+  , ghcOptHPCDir             = NoFlag -- not relevant for LH
+#endif
+  , ghcOptGHCiScripts        = mempty -- may interfere with interactive mode?
+  , ghcOptHiSuffix           = ghcOptHiSuffix           opts
+  , ghcOptObjSuffix          = ghcOptObjSuffix          opts
+  , ghcOptDynHiSuffix        = ghcOptDynHiSuffix        opts
+  , ghcOptDynObjSuffix       = ghcOptDynObjSuffix       opts
+  , ghcOptHiDir              = ghcOptHiDir              opts
+  , ghcOptObjDir             = ghcOptObjDir             opts
+  , ghcOptOutputDir          = ghcOptOutputDir          opts
+  , ghcOptStubDir            = ghcOptStubDir            opts
+  , ghcOptDynLinkMode        = ghcOptDynLinkMode        opts
+  , ghcOptShared             = ghcOptShared             opts
+  , ghcOptFPic               = ghcOptFPic               opts
+  , ghcOptDylibName          = ghcOptDylibName          opts
+#if MIN_VERSION_Cabal(1,22,0)
+  , ghcOptRPaths             = ghcOptRPaths             opts
+#endif
+  , ghcOptVerbosity          = ghcOptVerbosity          opts
+  , ghcOptCabal              = ghcOptCabal              opts
+  }
 
 --------------------------------------------------------------------------------
 -- Find Component Haskell Sources ----------------------------------------------
