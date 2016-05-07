@@ -1,5 +1,5 @@
 name:                  liquidhaskell-cabal
-version:               0.1.0.0
+version:               0.1.1.0
 synopsis:              Liquid Haskell integration for Cabal and stack
 description:           Provides support for checking projects using Cabal
                        and/or stack with LiquidHaskell.
