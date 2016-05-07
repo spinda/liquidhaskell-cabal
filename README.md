@@ -1,6 +1,6 @@
 # liquidhaskell-cabal
 
-*[Liquid Haskell](https://github.com/ucsd-progsys/liquidhaskell/) integration for Cabal and stack.*
+*[Liquid Haskell](https://github.com/ucsd-progsys/liquidhaskell/) integration for Cabal and Stack.*
 
 [![Hackage](https://img.shields.io/hackage/v/liquidhaskell-cabal.svg)](https://hackage.haskell.org/package/liquidhaskell-cabal)
 [![Hackage-Deps](https://img.shields.io/hackage-deps/v/liquidhaskell-cabal.svg)](http://packdeps.haskellers.com/feed?needle=liquidhaskell-cabal)
