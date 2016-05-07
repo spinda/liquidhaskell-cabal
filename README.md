@@ -78,7 +78,7 @@
   make it available to your `Setup.hs`:
 
 	```
-	$ cabal install liquidhaskell-cabal
+	$ cabal install liquidhaskell-cabal-0.1.1.0
 	```
 
 1. If you're building with Stack, add the following to your project's `stack.yaml`:
