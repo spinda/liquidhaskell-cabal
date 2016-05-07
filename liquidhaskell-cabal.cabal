@@ -4,8 +4,8 @@ synopsis:              Liquid Haskell integration for Cabal and stack
 description:           Provides support for checking projects using Cabal
                        and/or stack with LiquidHaskell.
                        
-                       Please see the "LiquidHaskell.Cabal" module or the
-                       README on GitHub for documentation.
+                       Please see the README on GitHub for setup and usage
+                       instructions.
 homepage:              https://github.com/spinda/liquidhaskell-cabal#readme
 bug-reports:           https://github.com/spinda/liquidhaskell-cabal/issues
 license:               BSD3
