@@ -31,7 +31,18 @@
 
    (For projects already using a custom `Setup.hs` file, see the section "Custom `Setup.hs` Files" below.)
 
-1. Add a `custom-setup` stanza to your project's .cabal file:
+1. Next, it's time to set up your project's .cabal file.
+
+   Add `liquidhaskell-cabal` to the `build-depends` lists of each of your libraries and executables:
+
+   ```
+   library
+     build-depends: {- ... other dependencies ... -}
+                  , liquidhaskell-cabal >= 0.1.1
+                    {- ... perhaps more dependencies? ... -}
+   ```
+
+   Then add a `custom-setup` stanza at the top level, outside the `library` and `executale` sections:
 
    ```
    custom-setup
