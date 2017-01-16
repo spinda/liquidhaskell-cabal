@@ -94,8 +94,6 @@
 1. If you're building with Stack, add the following to your project's `stack.yaml`:
 
    ```
-   explicit-setup-deps:
-     "*": true
    extra-deps:
      - liquidhaskell-cabal-0.2.0.0
    ```
@@ -103,6 +101,17 @@
    (If your `stack.yaml` already has an `extra-deps` list, add
    `liquidhaskell-cabal-0.2.0.0` to the existing one instead of starting a
    second list.)
+   
+   Then, if you're using a version of Stack prior to 1.4, add the following as well:
+   
+   ```
+   explicit-setup-deps:
+     "*": true
+   ```
+   
+   Otherwise, with Stack 1.4+, the `custom-setup` stanza in the `.cabal` file 
+   will be recognized automatically, and the `explicit-setup-deps` field is
+   unnecessary.
 
 That's it! You should be good to go.
 
