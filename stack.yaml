@@ -1,4 +1,4 @@
-resolver: lts-5.5
+resolver: lts-9.6
 compiler-check: newer-minor
 packages:
 - .

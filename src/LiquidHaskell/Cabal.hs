@@ -3,19 +3,29 @@
 -- for setup and usage instructions.
 
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
-module LiquidHaskell.Cabal (
-    -- * Setup.hs Hooks Kit
+module LiquidHaskell.Cabal
+  ( -- defaults
     liquidHaskellMain
   , liquidHaskellHooks
+
+    -- transformers
+  , simpleUserHooksLH
+  , enableLiquid
+  , runLiquidPostBuild
+  , runLiquidPostTest
+
+    -- raw hooks
   , liquidHaskellPostBuildHook
+  , liquidHaskellPostTestHook
   ) where
 
+import Control.Exception
 import Control.Monad
 
 import Data.List
 import Data.Maybe
-import Data.Monoid
 
 import Distribution.ModuleName hiding (main)
 import Distribution.PackageDescription
@@ -30,8 +40,11 @@ import Distribution.Simple.Program.GHC
 import Distribution.Simple.Setup
 import Distribution.Simple.Utils
 import Distribution.Verbosity
+import Distribution.Utils.NubList
 
 import System.FilePath
+
+import Debug.Trace
 
 --------------------------------------------------------------------------------
 -- Setup.hs Hooks Kit ----------------------------------------------------------
@@ -64,7 +77,28 @@ liquidHaskellMain = defaultMainWithHooks liquidHaskellHooks
 -- > main = defaultMainWithHooks $
 -- >   simpleUserHooks { postBuild = liquidHaskellPostBuildHook }
 liquidHaskellHooks :: UserHooks
-liquidHaskellHooks = simpleUserHooks { postBuild = liquidHaskellPostBuildHook }
+liquidHaskellHooks = runLiquidPostBuild simpleUserHooksLH
+
+simpleUserHooksLH :: UserHooks
+simpleUserHooksLH = enableLiquid simpleUserHooks
+
+enableLiquid :: UserHooks -> UserHooks
+enableLiquid hooks = hooks { hookedPrograms = liquidProgram : hookedPrograms hooks }
+
+runLiquidPostBuild :: UserHooks -> UserHooks
+runLiquidPostBuild hooks = hooks { postBuild = liquidHaskellPostBuildHook
+                                 , buildHook = quietWhenNoCode (buildHook hooks)
+                                 }
+
+runLiquidPostTest  :: UserHooks -> UserHooks
+runLiquidPostTest  hooks = hooks { postTest = liquidHaskellPostTestHook
+                                 }
+
+liquidHaskellPostBuildHook :: Args -> BuildFlags-> PackageDescription -> LocalBuildInfo -> IO ()
+liquidHaskellPostBuildHook args flags pd lbi = liquidHaskellHook args (buildVerbosity flags) pd lbi
+
+liquidHaskellPostTestHook :: Args -> TestFlags-> PackageDescription -> LocalBuildInfo -> IO ()
+liquidHaskellPostTestHook args flags pd lbi = liquidHaskellHook args (testVerbosity flags) pd lbi
 
 -- | The raw build hook, checking the @liquidhaskell@ flag and executing the
 -- LiquidHaskell binary with appropriate arguments when enabled. Can be hooked
@@ -75,21 +109,44 @@ liquidHaskellHooks = simpleUserHooks { postBuild = liquidHaskellPostBuildHook }
 -- > import LiquidHaskell.Cabal
 -- > main = defaultMainWithHooks $
 -- >   simpleUserHooks { postBuild = liquidHaskellPostBuildHook }
-liquidHaskellPostBuildHook :: Args -> BuildFlags -> PackageDescription
-                           -> LocalBuildInfo -> IO ()
-liquidHaskellPostBuildHook args flags pkg lbi = do
+liquidHaskellHook :: Args -> Distribution.Simple.Setup.Flag Verbosity-> PackageDescription -> LocalBuildInfo -> IO ()
+liquidHaskellHook args verbosityFlag pkg lbi = do
   enabled <- isFlagEnabled "liquidhaskell" lbi
   when enabled $ do
-    let verbosity = fromFlag $ buildVerbosity flags
+    let verbosity = fromFlag verbosityFlag
     withAllComponentsInBuildOrder pkg lbi $ \component clbi ->
       case component of
-        CLib lib -> verifyComponent verbosity lbi clbi (libBuildInfo lib)
-                    "library"
-                      =<< findLibSources lib
-        CExe exe -> verifyComponent verbosity lbi clbi (buildInfo exe)
-                    ("executable " ++ exeName exe)
-                      =<< findExeSources exe
+        CLib lib -> do
+          srcs <- findLibSources lib
+          verifyComponent verbosity lbi clbi (libBuildInfo lib)
+            "library" srcs
+
+        CExe exe -> do
+          srcs <- findExeSources exe
+          verifyComponent verbosity lbi clbi (buildInfo exe)
+            ("executable " ++ exeName exe) srcs
+
         _ -> return ()
+
+
+liquidHaskellOptions :: String
+liquidHaskellOptions = "x-liquidhaskell-options"
+
+--------------------------------------------------------------------------------
+-- Build process tweaks --------------------------------------------------------
+--------------------------------------------------------------------------------
+
+type CabalBuildHook = PackageDescription -> LocalBuildInfo -> UserHooks -> BuildFlags -> IO ()
+
+quietWhenNoCode :: CabalBuildHook -> CabalBuildHook
+quietWhenNoCode hook pd lbi uh bf = do
+    hook pd lbi uh bf `catch` continueWhenNoCode
+  where
+    noCode = any (== "-fno-code") (concatMap snd (buildProgramArgs bf))
+    continueWhenNoCode
+      | noCode    = \(e :: SomeException) -> return ()
+      | otherwise = throw
+
 
 --------------------------------------------------------------------------------
 -- Verify a Library or Executable Component ------------------------------------
@@ -102,7 +159,7 @@ verifyComponent verbosity lbi clbi bi desc sources = do
   let ghcFlags = makeGhcFlags verbosity lbi clbi bi
   let args = concat
         [ ("--ghc-option=" ++) <$> ghcFlags
-        , ("--c-files=" ++) <$> (cSources bi)
+        , ("--c-files="    ++) <$> cSources bi
         , userArgs
         , sources
         ]
@@ -111,95 +168,50 @@ verifyComponent verbosity lbi clbi bi desc sources = do
 
 getUserArgs :: String -> BuildInfo -> IO [ProgArg]
 getUserArgs desc bi =
-  case lookup "x-liquidhaskell-options" (customFieldsBI bi) of
-    Nothing -> return []
+  case lookup liquidHaskellOptions (customFieldsBI bi) of
+    Nothing  -> return []
     Just cmd ->
       case parseCommandArgs cmd of
         Right args -> return args
-        Left err -> die $
+        Left err   -> die $
           "failed to parse LiquidHaskell options for " ++ desc ++ ": " ++ err
 
 --------------------------------------------------------------------------------
 -- Construct GHC Options -------------------------------------------------------
 --------------------------------------------------------------------------------
 
-makeGhcFlags :: Verbosity -> LocalBuildInfo -> ComponentLocalBuildInfo
-             -> BuildInfo -> [String]
+makeGhcFlags
+  :: Verbosity
+  -> LocalBuildInfo
+  -> ComponentLocalBuildInfo
+  -> BuildInfo
+  -> [String]
 makeGhcFlags verbosity lbi clbi bi =
-  renderGhcOptions (compiler lbi) $
-  sanitizeGhcOptions $
-  componentGhcOptions verbosity lbi bi clbi $ buildDir lbi
-
--- Whitelist which GHC options get passed along to LiquidHaskell.
--- (see issue #2)
-sanitizeGhcOptions :: GhcOptions -> GhcOptions
-sanitizeGhcOptions opts = GhcOptions
-  { ghcOptMode               = ghcOptMode               opts
-  , ghcOptExtra              = ghcOptExtra              opts
-  , ghcOptExtraDefault       = ghcOptExtraDefault       opts
-  , ghcOptInputFiles         = ghcOptInputFiles         opts
-  , ghcOptInputModules       = ghcOptInputModules       opts
-  , ghcOptOutputFile         = ghcOptOutputFile         opts
-  , ghcOptOutputDynFile      = ghcOptOutputDynFile      opts
-  , ghcOptSourcePathClear    = ghcOptSourcePathClear    opts
-  , ghcOptSourcePath         = ghcOptSourcePath         opts
-#if MIN_VERSION_Cabal(1,22,0)
-  , ghcOptPackageKey         = ghcOptPackageKey         opts
+#if MIN_VERSION_Cabal(1,24,0)
+  renderGhcOptions (compiler lbi) (hostPlatform lbi)
 #else
-  , ghcOptPackageName        = ghcOptPackageName        opts
+  renderGhcOptions (compiler lbi)
 #endif
-  , ghcOptPackageDBs         = ghcOptPackageDBs         opts
-  , ghcOptPackages           = ghcOptPackages           opts
-  , ghcOptHideAllPackages    = ghcOptHideAllPackages    opts
-  , ghcOptNoAutoLinkPackages = ghcOptNoAutoLinkPackages opts
-#if MIN_VERSION_Cabal(1,22,0)
-  , ghcOptSigOf              = ghcOptSigOf              opts
-#endif
-  , ghcOptLinkLibs           = ghcOptLinkLibs           opts
-  , ghcOptLinkLibPath        = ghcOptLinkLibPath        opts
-  , ghcOptLinkOptions        = ghcOptLinkOptions        opts
-  , ghcOptLinkFrameworks     = ghcOptLinkFrameworks     opts
-  , ghcOptNoLink             = NoFlag -- LH uses LinkInMemory
-  , ghcOptLinkNoHsMain       = ghcOptLinkNoHsMain       opts
-  , ghcOptCcOptions          = ghcOptCcOptions          opts
-  , ghcOptCppOptions         = ghcOptCppOptions         opts
-  , ghcOptCppIncludePath     = ghcOptCppIncludePath     opts
-  , ghcOptCppIncludes        = ghcOptCppIncludes        opts
-  , ghcOptFfiIncludes        = ghcOptFfiIncludes        opts
-  , ghcOptLanguage           = ghcOptLanguage           opts
-  , ghcOptExtensions         = ghcOptExtensions         opts
-  , ghcOptExtensionMap       = ghcOptExtensionMap       opts
-  , ghcOptOptimisation       = NoFlag -- conflicts with interactive mode GHC
-#if MIN_VERSION_Cabal(1,22,0)
-  , ghcOptDebugInfo          = ghcOptDebugInfo          opts
-#endif
-  , ghcOptProfilingMode      = NoFlag -- LH sets its own profiling mode
-  , ghcOptSplitObjs          = ghcOptSplitObjs          opts
+  $ sanitizeGhcOptions
+  $ componentGhcOptions verbosity lbi bi clbi (buildDir lbi)
+
+-- Mute options that interfere with Liquid Haskell
+sanitizeGhcOptions :: GhcOptions -> GhcOptions
+sanitizeGhcOptions opts =
+  opts { ghcOptNoLink             = NoFlag -- LH uses LinkInMemory
+       , ghcOptOptimisation       = NoFlag -- conflicts with interactive mode GHC
+       , ghcOptProfilingMode      = NoFlag -- LH sets its own profiling mode
 #if MIN_VERSION_Cabal(1,20,0)
-  , ghcOptNumJobs            = NoFlag -- not relevant for LH
+       , ghcOptNumJobs            = NoFlag -- not relevant for LH
 #endif
 #if MIN_VERSION_Cabal(1,22,0)
-  , ghcOptHPCDir             = NoFlag -- not relevant for LH
+       , ghcOptHPCDir             = NoFlag -- not relevant for LH
 #endif
-  , ghcOptGHCiScripts        = mempty -- may interfere with interactive mode?
-  , ghcOptHiSuffix           = ghcOptHiSuffix           opts
-  , ghcOptObjSuffix          = ghcOptObjSuffix          opts
-  , ghcOptDynHiSuffix        = ghcOptDynHiSuffix        opts
-  , ghcOptDynObjSuffix       = ghcOptDynObjSuffix       opts
-  , ghcOptHiDir              = ghcOptHiDir              opts
-  , ghcOptObjDir             = ghcOptObjDir             opts
-  , ghcOptOutputDir          = ghcOptOutputDir          opts
-  , ghcOptStubDir            = ghcOptStubDir            opts
-  , ghcOptDynLinkMode        = ghcOptDynLinkMode        opts
-  , ghcOptShared             = ghcOptShared             opts
-  , ghcOptFPic               = ghcOptFPic               opts
-  , ghcOptDylibName          = ghcOptDylibName          opts
-#if MIN_VERSION_Cabal(1,22,0)
-  , ghcOptRPaths             = ghcOptRPaths             opts
-#endif
-  , ghcOptVerbosity          = ghcOptVerbosity          opts
-  , ghcOptCabal              = ghcOptCabal              opts
-  }
+       , ghcOptGHCiScripts        = mempty -- may interfere with interactive mode?
+       , ghcOptExtra              = noOptimisation $ ghcOptExtra opts
+       }
+  where
+    noOptimisation = toNubListR . filter (not . isPrefixOf "-O") . fromNubListR
 
 --------------------------------------------------------------------------------
 -- Find Component Haskell Sources ----------------------------------------------
@@ -211,13 +223,13 @@ findLibSources lib = findModuleSources (libBuildInfo lib) (exposedModules lib)
 findExeSources :: Executable -> IO [FilePath]
 findExeSources exe = do
   moduleSrcs <- findModuleSources (buildInfo exe) []
-  mainSrc <- findFile (hsSourceDirs $ buildInfo exe) (modulePath exe)
+  mainSrc    <- findFile (hsSourceDirs (buildInfo exe)) (modulePath exe)
   return (mainSrc : moduleSrcs)
 
 findModuleSources :: BuildInfo -> [ModuleName] -> IO [FilePath]
 findModuleSources bi exposed = do
   let modules = exposed ++ otherModules bi
-  hsSources <- mapM (findModuleSource ["hs", "lhs"] bi) modules
+  hsSources     <- mapM (findModuleSource ["hs", "lhs"] bi)           modules
   hsBootSources <- mapM (findModuleSource ["hs-boot", "lhs-boot"] bi) modules
   return $ catMaybes (hsSources ++ hsBootSources)
 
@@ -226,7 +238,7 @@ findModuleSource suffixes bi mod =
   findFileWithExtension suffixes (hsSourceDirs bi) (toFilePath mod)
 
 --------------------------------------------------------------------------------
--- Located the LiquidHaskell Binary --------------------------------------------
+-- Locating the LiquidHaskell Binary -------------------------------------------
 --------------------------------------------------------------------------------
 
 requireLiquidProgram :: Verbosity -> ProgramDb -> IO ConfiguredProgram
@@ -243,7 +255,7 @@ liquidProgram = simpleProgram "liquid"
 isFlagEnabled :: String -> LocalBuildInfo -> IO Bool
 isFlagEnabled name lbi = case getOverriddenFlagValue name lbi of
   Just enabled -> return enabled
-  Nothing -> getDefaultFlagValue name lbi False
+  Nothing      -> getDefaultFlagValue name lbi False
 
 getOverriddenFlagValue :: String -> LocalBuildInfo -> Maybe Bool
 getOverriddenFlagValue name lbi = lookup (FlagName name) overriddenFlags
@@ -263,12 +275,12 @@ getDefaultFlagValue name lbi def = case pkgDescrFile lbi of
 --------------------------------------------------------------------------------
 
 parseCommandArgs :: String -> Either String [ProgArg]
-parseCommandArgs cmd =
-  case fieldSet field 0 cmd [] of
-    ParseOk _ out -> Right $ concat $ map snd out
+parseCommandArgs cmd = case fieldSet field 0 cmd [] of
+    ParseOk _   out -> Right $ foldMap snd out
     ParseFailed err -> Left $ snd $ locatedErrorMsg err
   where
-    field = optsField "x-liquidhaskell-options"
+    field = optsField liquidHaskellOptions
                       (OtherCompiler "LiquidHaskell")
-                      id (++)
-
+                      id        -- get :: opts -> opts
+                      (++)      -- set :: opts -> opts -> opts
+                                -- where opts=[(CompilerFlavor,[String])]
