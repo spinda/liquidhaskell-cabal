@@ -1,5 +1,6 @@
-resolver: lts-9.6
+resolver: lts-13.14
 compiler-check: newer-minor
 packages:
 - .
 
+extra-deps: [] 

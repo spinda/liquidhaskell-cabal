@@ -8,6 +8,7 @@
 module LiquidHaskell.Cabal
   ( -- defaults
     liquidHaskellMain
+  , liquidHaskellMainHooks
   , liquidHaskellHooks
 
     -- transformers
@@ -27,9 +28,10 @@ import Control.Monad
 import Data.List
 import Data.Maybe
 
+import Distribution.Types.UnqualComponentName
 import Distribution.ModuleName hiding (main)
 import Distribution.PackageDescription
-import Distribution.PackageDescription.Parse
+import Distribution.PackageDescription.Parsec
 import Distribution.ParseUtils
 import Distribution.Simple
 import Distribution.Simple.GHC
@@ -60,6 +62,7 @@ import Debug.Trace
 -- > import Distribution.Simple
 -- > import LiquidHaskell.Cabal
 -- > main = defaultMainWithHooks liquidHaskellHooks
+
 liquidHaskellMain :: IO ()
 liquidHaskellMain = defaultMainWithHooks liquidHaskellHooks
 
@@ -68,7 +71,7 @@ liquidHaskellMain = defaultMainWithHooks liquidHaskellHooks
 --
 -- > import Distribution.Simple
 -- > import LiquidHaskell.Cabal
--- > main = defaultMainWithHooks liquidHaskellHooks
+-- > main = liquidHaskellMainHooks 
 --
 -- This is equivalent to:
 --
@@ -76,6 +79,13 @@ liquidHaskellMain = defaultMainWithHooks liquidHaskellHooks
 -- > import LiquidHaskell.Cabal
 -- > main = defaultMainWithHooks $
 -- >   simpleUserHooks { postBuild = liquidHaskellPostBuildHook }
+
+liquidHaskellMainHooks :: IO ()
+liquidHaskellMainHooks = defaultMainWithHooks $
+  simpleUserHooks { postBuild = liquidHaskellPostBuildHook }
+
+
+
 liquidHaskellHooks :: UserHooks
 liquidHaskellHooks = runLiquidPostBuild simpleUserHooksLH
 
@@ -124,8 +134,7 @@ liquidHaskellHook args verbosityFlag pkg lbi = do
         CExe exe -> do
           srcs <- findExeSources exe
           verifyComponent verbosity lbi clbi (buildInfo exe)
-            ("executable " ++ exeName exe) srcs
-
+            ("executable " ++  unUnqualComponentName (exeName exe)) srcs
         _ -> return ()
 
 
@@ -173,7 +182,7 @@ getUserArgs desc bi =
     Just cmd ->
       case parseCommandArgs cmd of
         Right args -> return args
-        Left err   -> die $
+        Left err   -> dieNoVerbosity $
           "failed to parse LiquidHaskell options for " ++ desc ++ ": " ++ err
 
 --------------------------------------------------------------------------------
@@ -208,10 +217,8 @@ sanitizeGhcOptions opts =
        , ghcOptHPCDir             = NoFlag -- not relevant for LH
 #endif
        , ghcOptGHCiScripts        = mempty -- may interfere with interactive mode?
-       , ghcOptExtra              = noOptimisation $ ghcOptExtra opts
+       , ghcOptExtra              = filter (not . isPrefixOf "-O") (ghcOptExtra opts)
        }
-  where
-    noOptimisation = toNubListR . filter (not . isPrefixOf "-O") . fromNubListR
 
 --------------------------------------------------------------------------------
 -- Find Component Haskell Sources ----------------------------------------------
@@ -258,16 +265,16 @@ isFlagEnabled name lbi = case getOverriddenFlagValue name lbi of
   Nothing      -> getDefaultFlagValue name lbi False
 
 getOverriddenFlagValue :: String -> LocalBuildInfo -> Maybe Bool
-getOverriddenFlagValue name lbi = lookup (FlagName name) overriddenFlags
+getOverriddenFlagValue name lbi = lookupFlagAssignment (mkFlagName name) overriddenFlags
   where
-    overriddenFlags = configConfigurationsFlags $ configFlags lbi
+    overriddenFlags = configConfigurationsFlags (configFlags lbi)
 
 getDefaultFlagValue :: String -> LocalBuildInfo -> Bool -> IO Bool
 getDefaultFlagValue name lbi def = case pkgDescrFile lbi of
   Nothing -> return def
   Just cabalFile -> do
-    descr <- readPackageDescription silent cabalFile
-    let flag = find ((FlagName name ==) . flagName) $ genPackageFlags descr
+    descr <- readGenericPackageDescription silent cabalFile
+    let flag = find ((mkFlagName name ==) . flagName) $ genPackageFlags descr
     return $ maybe def flagDefault flag
 
 --------------------------------------------------------------------------------
