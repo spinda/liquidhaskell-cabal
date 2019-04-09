@@ -38,7 +38,7 @@
    ```
    library
      build-depends: {- ... other dependencies ... -}
-                  , liquidhaskell-cabal >= 0.1.1
+                  , liquidhaskell-cabal >= 0.2.0
                     {- ... perhaps more dependencies? ... -}
    ```
 
@@ -46,7 +46,7 @@
 
    ```
    custom-setup
-     setup-depends: base, Cabal, liquidhaskell-cabal >= 0.1.1
+     setup-depends: base, Cabal, liquidhaskell-cabal >= 0.2.0
    ```
   
    This tells Cabal to make the `base`, `Cabal`, and `liquidhaskell-cabal`
