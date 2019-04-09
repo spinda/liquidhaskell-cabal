@@ -5,7 +5,7 @@ description:           Provides support for checking projects using Cabal
                        and/or stack with LiquidHaskell.
 
                        Please see the
-                       <https://github.com/spinda/liquidhaskell-cabal/blob/0.1.1.0/README.md README>
+                       <https://github.com/spinda/liquidhaskell-cabal/blob/0.2.0.0/README.md README>
                        on GitHub for setup and usage instructions.
 homepage:              https://github.com/spinda/liquidhaskell-cabal#readme
 bug-reports:           https://github.com/spinda/liquidhaskell-cabal/issues
@@ -13,7 +13,7 @@ license:               BSD3
 license-file:          LICENSE
 author:                Michael Smith
 maintainer:            Michael Smith <michael@spinda.net>
-copyright:             2016 Michael Smith
+copyright:             2016-2019 Michael Smith, 2017 Matt Chan, 2019 Ranjit Jhala
 category:              Development
 build-type:            Simple
 cabal-version:         >=1.10
@@ -22,7 +22,7 @@ library
   hs-source-dirs:      src
   exposed-modules:     LiquidHaskell.Cabal
   build-depends:       base >= 4.4 && < 5
-                     , Cabal 
+                     , Cabal
                      , filepath >= 1.3 && <1.5
   default-language:    Haskell2010
 

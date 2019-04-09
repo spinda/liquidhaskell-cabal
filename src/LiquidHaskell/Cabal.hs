@@ -1,5 +1,5 @@
 -- | Please see the
--- <https://github.com/spinda/liquidhaskell-cabal/blob/0.1.1.0/README.md README>
+-- <https://github.com/spinda/liquidhaskell-cabal/blob/0.2.0.0/README.md README>
 -- for setup and usage instructions.
 
 {-# LANGUAGE CPP #-}
@@ -39,7 +39,7 @@ import Distribution.Simple.LocalBuildInfo
 import Distribution.Simple.Program
 import Distribution.Simple.Program.Db
 import Distribution.Simple.Program.GHC
-import Distribution.Simple.Setup
+import Distribution.Simple.Setup as DS
 import Distribution.Simple.Utils
 import Distribution.Verbosity
 import Distribution.Utils.NubList
@@ -71,7 +71,7 @@ liquidHaskellMain = defaultMainWithHooks liquidHaskellHooks
 --
 -- > import Distribution.Simple
 -- > import LiquidHaskell.Cabal
--- > main = liquidHaskellMainHooks 
+-- > main = liquidHaskellMainHooks
 --
 -- This is equivalent to:
 --
@@ -100,7 +100,7 @@ runLiquidPostBuild hooks = hooks { postBuild = liquidHaskellPostBuildHook
                                  , buildHook = quietWhenNoCode (buildHook hooks)
                                  }
 
-runLiquidPostTest  :: UserHooks -> UserHooks
+runLiquidPostTest :: UserHooks -> UserHooks
 runLiquidPostTest  hooks = hooks { postTest = liquidHaskellPostTestHook
                                  }
 
@@ -119,7 +119,7 @@ liquidHaskellPostTestHook args flags pd lbi = liquidHaskellHook args (testVerbos
 -- > import LiquidHaskell.Cabal
 -- > main = defaultMainWithHooks $
 -- >   simpleUserHooks { postBuild = liquidHaskellPostBuildHook }
-liquidHaskellHook :: Args -> Distribution.Simple.Setup.Flag Verbosity-> PackageDescription -> LocalBuildInfo -> IO ()
+liquidHaskellHook :: Args -> DS.Flag Verbosity -> PackageDescription -> LocalBuildInfo -> IO ()
 liquidHaskellHook args verbosityFlag pkg lbi = do
   enabled <- isFlagEnabled "liquidhaskell" lbi
   when enabled $ do
@@ -142,7 +142,7 @@ liquidHaskellOptions :: String
 liquidHaskellOptions = "x-liquidhaskell-options"
 
 --------------------------------------------------------------------------------
--- Build process tweaks --------------------------------------------------------
+-- Build Process Tweaks --------------------------------------------------------
 --------------------------------------------------------------------------------
 
 type CabalBuildHook = PackageDescription -> LocalBuildInfo -> UserHooks -> BuildFlags -> IO ()
@@ -155,7 +155,6 @@ quietWhenNoCode hook pd lbi uh bf = do
     continueWhenNoCode
       | noCode    = \(e :: SomeException) -> return ()
       | otherwise = throw
-
 
 --------------------------------------------------------------------------------
 -- Verify a Library or Executable Component ------------------------------------
@@ -271,7 +270,7 @@ getOverriddenFlagValue name lbi = lookupFlagAssignment (mkFlagName name) overrid
 
 getDefaultFlagValue :: String -> LocalBuildInfo -> Bool -> IO Bool
 getDefaultFlagValue name lbi def = case pkgDescrFile lbi of
-  Nothing -> return def
+  Nothing        -> return def
   Just cabalFile -> do
     descr <- readGenericPackageDescription silent cabalFile
     let flag = find ((mkFlagName name ==) . flagName) $ genPackageFlags descr
