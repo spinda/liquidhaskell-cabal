@@ -48,7 +48,7 @@
    custom-setup
      setup-depends: base, Cabal, liquidhaskell-cabal >= 0.2.0
    ```
-  
+
    This tells Cabal to make the `base`, `Cabal`, and `liquidhaskell-cabal`
    packages available when building `Setup.hs`.  It goes at the top level of
    your .cabal file, next to `library`, `executable`, and `test-suite`. And as
@@ -101,15 +101,15 @@
    (If your `stack.yaml` already has an `extra-deps` list, add
    `liquidhaskell-cabal-0.2.0.0` to the existing one instead of starting a
    second list.)
-   
+
    Then, if you're using a version of Stack prior to 1.4, add the following as well:
-   
+
    ```
    explicit-setup-deps:
      "*": true
    ```
-   
-   Otherwise, with Stack 1.4+, the `custom-setup` stanza in the `.cabal` file 
+
+   Otherwise, with Stack 1.4+, the `custom-setup` stanza in the `.cabal` file
    will be recognized automatically, and the `explicit-setup-deps` field is
    unnecessary.
 
