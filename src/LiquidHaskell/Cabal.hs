@@ -25,6 +25,7 @@ module LiquidHaskell.Cabal
 import Control.Exception
 import Control.Monad
 
+import Data.Foldable
 import Data.List
 import Data.Maybe
 
@@ -44,6 +45,7 @@ import Distribution.Simple.Utils
 import Distribution.Verbosity
 import Distribution.Utils.NubList
 
+import System.Directory (doesPathExist)
 import System.FilePath
 
 import Debug.Trace
@@ -127,19 +129,32 @@ liquidHaskellHook args verbosityFlag pkg lbi = do
     withAllComponentsInBuildOrder pkg lbi $ \component clbi ->
       case component of
         CLib lib -> do
-          srcs <- findLibSources lib
-          verifyComponent verbosity lbi clbi (libBuildInfo lib)
+          let buildInfo' = libBuildInfo lib
+              checkedFiles = getCheckedFiles buildInfo'
+
+          verifyCheckedFiles checkedFiles
+
+          srcs <- filterCheckedFiles checkedFiles <$> findLibSources lib
+          verifyComponent verbosity lbi clbi buildInfo'
             "library" srcs
 
         CExe exe -> do
-          srcs <- findExeSources exe
-          verifyComponent verbosity lbi clbi (buildInfo exe)
+          let buildInfo' = buildInfo exe
+              checkedFiles = getCheckedFiles buildInfo'
+
+          verifyCheckedFiles checkedFiles
+
+          srcs <- filterCheckedFiles checkedFiles <$> findExeSources exe
+          verifyComponent verbosity lbi clbi buildInfo'
             ("executable " ++  unUnqualComponentName (exeName exe)) srcs
         _ -> return ()
 
 
 liquidHaskellOptions :: String
 liquidHaskellOptions = "x-liquidhaskell-options"
+
+liquidHaskellCheckedFiles :: String
+liquidHaskellCheckedFiles = "x-liquidhaskell-checked-files"
 
 --------------------------------------------------------------------------------
 -- Build Process Tweaks --------------------------------------------------------
@@ -183,6 +198,35 @@ getUserArgs desc bi =
         Right args -> return args
         Left err   -> dieNoVerbosity $
           "failed to parse LiquidHaskell options for " ++ desc ++ ": " ++ err
+
+--------------------------------------------------------------------------------
+-- Filter out files for which to run LiquidHaskell -----------------------------
+--------------------------------------------------------------------------------
+
+data CheckedFiles =
+    All
+  | Whitelist [FilePath]
+
+filterCheckedFiles :: CheckedFiles -> [FilePath] -> [FilePath]
+filterCheckedFiles All                 fps = fps
+filterCheckedFiles (Whitelist allowed) fps = intersectBy prefixOrEqual fps allowed
+  where
+    prefixOrEqual x y = x == y || y `isPrefixOf` x
+
+getCheckedFiles :: BuildInfo -> CheckedFiles
+getCheckedFiles bi =
+  maybe All (Whitelist . splitOn ' ') $ lookup liquidHaskellCheckedFiles (customFieldsBI bi)
+  where
+    splitOn :: Char -> String -> [String]
+    splitOn _ []  = []
+    splitOn c str = let (pref, suff) = break (== c) str
+                     in pref : splitOn c (drop 1 suff)
+
+verifyCheckedFiles :: CheckedFiles -> IO ()
+verifyCheckedFiles All = pure ()
+verifyCheckedFiles (Whitelist allowed) = for_ allowed $ \file -> do
+  exists <- doesPathExist file
+  unless exists $ dieNoVerbosity $ file ++ " specified in " ++ liquidHaskellCheckedFiles ++ " is missing!"
 
 --------------------------------------------------------------------------------
 -- Construct GHC Options -------------------------------------------------------

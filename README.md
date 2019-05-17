@@ -133,13 +133,14 @@ cabal configure -fliquidhaskell && cabal build
 
 (Running `cabal configure` without `-fliquidhaskell` will turn it back off.)
 
-## Custom LiquidHaskell Flags
+## Custom `liquidhaskell-cabal` options
 
-Each library and executable in your package can specify its own extra command
-line flags to pass to LiquidHaskell (these are described in the [LiquidHaskell
-README](https://github.com/ucsd-progsys/liquidhaskell)). Simply add an
-`x-liquidhaskell-options` field to the relevant components:
+There are additional custom option fields that you can add to your `.cabal` file
+for each executable or library:
 
+### `x-liquidhaskell-options`
+Extra command line flags to pass to LiquidHaskell (these are described in the [LiquidHaskell
+README](https://github.com/ucsd-progsys/liquidhaskell#command-line-options)).
 ```
 library
   (... other fields ...)
@@ -148,6 +149,22 @@ library
 executable myexecutable
   (... other fields ...)
   x-liquidhaskell-options: --diff
+```
+
+### `x-liquidhaskell-checked-files`
+Whitelist of files to check. This is convenient when you don't want to
+check your entire project at once.
+
+The list also supports directories, e.g. listing `A/B` will also include `A/B/C.hs`.
+When this field is missing `liquidhaskell-cabal` defaults to checking everything.
+```
+library
+  (... other fields ...)
+  x-liquidhaskell-checked-files: src/A.hs src/B
+
+executable myexecutable
+  (... other fields ...)
+  x-liquidhaskell-checked-files: app/Main.hs
 ```
 
 ## Custom `Setup.hs` Files
