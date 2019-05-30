@@ -5,11 +5,13 @@
 [![Hackage](https://img.shields.io/hackage/v/liquidhaskell-cabal.svg)](https://hackage.haskell.org/package/liquidhaskell-cabal)
 [![Hackage-Deps](https://img.shields.io/hackage-deps/v/liquidhaskell-cabal.svg)](http://packdeps.haskellers.com/feed?needle=liquidhaskell-cabal)
 
-`liquidhaskell-cabal` provides drop-in LiquidHaskell integration for projects built with Cabal and/or Stack.
+`liquidhaskell-cabal` provides drop-in LiquidHaskell integration for projects built with Cabal
+and/or Stack.
 
 ## Setting Up
 
-*(See [`liquidhaskell-cabal-demo`](https://github.com/spinda/liquidhaskell-cabal-demo) for an example project setup.)*
+*(See [`liquidhaskell-cabal-demo`](https://github.com/spinda/liquidhaskell-cabal-demo) for an
+example project setup.)*
 
 1. Make sure you have LiquidHaskell version 0.6 or above installed and available in your `$PATH`.
 
@@ -29,11 +31,13 @@
 
    This hooks LiquidHaskell into your Cabal/Stack-based build.
 
-   (For projects already using a custom `Setup.hs` file, see the section "Custom `Setup.hs` Files" below.)
+   (For projects already using a custom `Setup.hs` file, see the section
+   ["Custom `Setup.hs` Files"](#custom-setuphs-files) below.)
 
 1. Next, it's time to set up your project's .cabal file.
 
-   Add `liquidhaskell-cabal` to the `build-depends` lists of each of your libraries and executables:
+   Add `liquidhaskell-cabal` to the `build-depends` lists of each of your libraries and
+   executables:
 
    ```
    library
@@ -42,7 +46,8 @@
                     {- ... perhaps more dependencies? ... -}
    ```
 
-   Then add a `custom-setup` stanza at the top level, outside the `library` and `executale` sections:
+   Then add a `custom-setup` stanza at the top level, outside the `library` and `executale`
+   sections:
 
    ```
    custom-setup
@@ -74,8 +79,8 @@
    ```
 
    Each library and executable in your package can optionally specify its own
-   LiquidHaskell flags; see the section "Custom LiquidHaskell Flags" below for
-   more on that.
+   LiquidHaskell flags; see the section on [`x-liquidhaskell-options`](#x-liquidhaskell-options)
+   below for more on that.
 
 1. When building, you may see a warning that looks like:
 
@@ -133,14 +138,16 @@ cabal configure -fliquidhaskell && cabal build
 
 (Running `cabal configure` without `-fliquidhaskell` will turn it back off.)
 
-## Custom `liquidhaskell-cabal` options
+## Additional `.cabal` Fields
 
-There are additional custom option fields that you can add to your `.cabal` file
-for each executable or library:
+`liquidhaskell-cabal` includes a few new fields that you can add to your `.cabal` file for each
+executable or library.
 
 ### `x-liquidhaskell-options`
-Extra command line flags to pass to LiquidHaskell (these are described in the [LiquidHaskell
-README](https://github.com/ucsd-progsys/liquidhaskell#command-line-options)).
+
+Extra command line flags to pass to LiquidHaskell (these are described in the
+[LiquidHaskell README](https://github.com/ucsd-progsys/liquidhaskell#command-line-options)).
+
 ```
 library
   (... other fields ...)
@@ -151,20 +158,23 @@ executable myexecutable
   x-liquidhaskell-options: --diff
 ```
 
-### `x-liquidhaskell-checked-files`
-Whitelist of files to check. This is convenient when you don't want to
-check your entire project at once.
+### `x-liquidhaskell-verify`
 
-The list also supports directories, e.g. listing `A/B` will also include `A/B/C.hs`.
-When this field is missing `liquidhaskell-cabal` defaults to checking everything.
+When you only want LiquidHaskell to verify a subset of your project's files, instead of the whole
+thing, add an instance of this field for each path you want checked.
+
+Both file and directory paths are supported, so listing `A/B` will also include `A/B/C.hs`. When
+this field is missing, `liquidhaskell-cabal` defaults to checking all Haskell files in the project.
+
 ```
 library
   (... other fields ...)
-  x-liquidhaskell-checked-files: src/A.hs src/B
+  x-liquidhaskell-verify: src/A.hs
+  x-liquidhaskell-verify: src/B
 
 executable myexecutable
   (... other fields ...)
-  x-liquidhaskell-checked-files: app/Main.hs
+  x-liquidhaskell-verify: app/Main.hs
 ```
 
 ## Custom `Setup.hs` Files

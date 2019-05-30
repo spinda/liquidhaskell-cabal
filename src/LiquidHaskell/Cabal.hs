@@ -4,6 +4,7 @@
 
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 
 module LiquidHaskell.Cabal
   ( -- defaults
@@ -22,9 +23,11 @@ module LiquidHaskell.Cabal
   , liquidHaskellPostTestHook
   ) where
 
+import Control.Applicative
 import Control.Exception
 import Control.Monad
 
+import Data.Either
 import Data.Foldable
 import Data.List
 import Data.Maybe
@@ -45,7 +48,7 @@ import Distribution.Simple.Utils
 import Distribution.Verbosity
 import Distribution.Utils.NubList
 
-import System.Directory (doesPathExist)
+import System.Directory (canonicalizePath, doesDirectoryExist, doesFileExist)
 import System.FilePath
 
 import Debug.Trace
@@ -129,32 +132,26 @@ liquidHaskellHook args verbosityFlag pkg lbi = do
     withAllComponentsInBuildOrder pkg lbi $ \component clbi ->
       case component of
         CLib lib -> do
+          let desc = "library"
           let buildInfo' = libBuildInfo lib
-              checkedFiles = getCheckedFiles buildInfo'
-
-          verifyCheckedFiles checkedFiles
-
-          srcs <- filterCheckedFiles checkedFiles <$> findLibSources lib
-          verifyComponent verbosity lbi clbi buildInfo'
-            "library" srcs
+          sourceFilter <- makeSourceFilter desc buildInfo'
+          srcs <- filterSources desc sourceFilter =<< findLibSources lib
+          verifyComponent verbosity lbi clbi buildInfo' desc srcs
 
         CExe exe -> do
+          let desc = "executable " ++ unUnqualComponentName (exeName exe)
           let buildInfo' = buildInfo exe
-              checkedFiles = getCheckedFiles buildInfo'
-
-          verifyCheckedFiles checkedFiles
-
-          srcs <- filterCheckedFiles checkedFiles <$> findExeSources exe
-          verifyComponent verbosity lbi clbi buildInfo'
-            ("executable " ++  unUnqualComponentName (exeName exe)) srcs
+          sourceFilter <- makeSourceFilter desc buildInfo'
+          srcs <- filterSources desc sourceFilter =<< findExeSources exe
+          verifyComponent verbosity lbi clbi buildInfo' desc srcs
         _ -> return ()
 
 
-liquidHaskellOptions :: String
-liquidHaskellOptions = "x-liquidhaskell-options"
+liquidHaskellOptionsField :: String
+liquidHaskellOptionsField = "x-liquidhaskell-options"
 
-liquidHaskellCheckedFiles :: String
-liquidHaskellCheckedFiles = "x-liquidhaskell-checked-files"
+liquidHaskellVerifyField :: String
+liquidHaskellVerifyField = "x-liquidhaskell-verify"
 
 --------------------------------------------------------------------------------
 -- Build Process Tweaks --------------------------------------------------------
@@ -191,7 +188,7 @@ verifyComponent verbosity lbi clbi bi desc sources = do
 
 getUserArgs :: String -> BuildInfo -> IO [ProgArg]
 getUserArgs desc bi =
-  case lookup liquidHaskellOptions (customFieldsBI bi) of
+  case lookup liquidHaskellOptionsField (customFieldsBI bi) of
     Nothing  -> return []
     Just cmd ->
       case parseCommandArgs cmd of
@@ -200,33 +197,86 @@ getUserArgs desc bi =
           "failed to parse LiquidHaskell options for " ++ desc ++ ": " ++ err
 
 --------------------------------------------------------------------------------
--- Filter out files for which to run LiquidHaskell -----------------------------
+-- Filter Input Sources --------------------------------------------------------
 --------------------------------------------------------------------------------
 
-data CheckedFiles =
+type SourcePattern = Either FilePattern DirectoryPattern
+
+data FilePattern = FilePattern
+  { filePatternSource   :: !FilePath
+  , filePatternCompiled :: !FilePath
+  }
+
+data DirectoryPattern = DirectoryPattern
+  { directoryPatternSource   :: !FilePath
+  , directoryPatternCompiled :: ![FilePath]
+  }
+
+data SourceFilter =
     All
-  | Whitelist [FilePath]
+  | Whitelist [FilePattern] [DirectoryPattern]
 
-filterCheckedFiles :: CheckedFiles -> [FilePath] -> [FilePath]
-filterCheckedFiles All                 fps = fps
-filterCheckedFiles (Whitelist allowed) fps = intersectBy prefixOrEqual fps allowed
+makeSourceFilter :: String -> BuildInfo -> IO SourceFilter
+makeSourceFilter desc bi
+  | null paths = return All
+  | otherwise = uncurry Whitelist . partitionEithers <$> mapM (makeSourcePattern desc) paths
   where
-    prefixOrEqual x y = x == y || y `isPrefixOf` x
+    paths = map snd $ filter ((== liquidHaskellVerifyField) . fst) $ customFieldsBI bi
 
-getCheckedFiles :: BuildInfo -> CheckedFiles
-getCheckedFiles bi =
-  maybe All (Whitelist . splitOn ' ') $ lookup liquidHaskellCheckedFiles (customFieldsBI bi)
+makeSourcePattern :: String -> FilePath -> IO SourcePattern
+makeSourcePattern desc = tryFilePattern
   where
-    splitOn :: Char -> String -> [String]
-    splitOn _ []  = []
-    splitOn c str = let (pref, suff) = break (== c) str
-                     in pref : splitOn c (drop 1 suff)
+    tryFilePattern path = do
+      fileExists <- doesFileExist path
+      if fileExists
+         then Left . FilePattern path <$> canonicalizePath path
+         else tryDirectoryPattern path
+    tryDirectoryPattern path = do
+      directoryExists <- doesDirectoryExist path
+      if directoryExists
+         then Right . DirectoryPattern path . splitDirectories <$> canonicalizePath path
+         else dieWithError path
+    dieWithError path = dieNoVerbosity $
+      "Path passed to " ++ liquidHaskellVerifyField ++
+      " for " ++ desc ++
+      " does not exist: " ++ path
 
-verifyCheckedFiles :: CheckedFiles -> IO ()
-verifyCheckedFiles All = pure ()
-verifyCheckedFiles (Whitelist allowed) = for_ allowed $ \file -> do
-  exists <- doesPathExist file
-  unless exists $ dieNoVerbosity $ file ++ " specified in " ++ liquidHaskellCheckedFiles ++ " is missing!"
+filterSources :: String -> SourceFilter -> [FilePath] -> IO [FilePath]
+filterSources _ All paths = return paths
+filterSources desc (Whitelist filePatterns directoryPatterns) paths = do
+  results <- catMaybes <$> mapM (matchSourcePath filePatterns directoryPatterns) paths
+
+  let consumedPatterns = snd <$> results
+  let (consumedFilePatterns, consumedDirectoryPatterns) = partitionEithers consumedPatterns
+
+  let unconsumedFilePaths = (\\) (filePatternSource <$> filePatterns)
+                                 (filePatternSource <$> consumedFilePatterns)
+  let unconsumedDirectoryPaths = (\\) (directoryPatternSource <$> directoryPatterns)
+                                      (directoryPatternSource <$> consumedDirectoryPatterns)
+  let unconsumedPaths = unconsumedFilePaths ++ unconsumedDirectoryPaths
+
+  unless (null unconsumedPaths) $ dieNoVerbosity $
+    "Paths passed to " ++ liquidHaskellVerifyField ++
+    " for " ++ desc ++
+    " do not match any source files in the component:\n" ++
+    unlines (("- " ++) <$> unconsumedPaths)
+
+  return $ fst <$> results
+
+matchSourcePath
+  :: [FilePattern]
+  -> [DirectoryPattern]
+  -> FilePath
+  -> IO (Maybe (FilePath, SourcePattern))
+matchSourcePath filePatterns directoryPatterns path = do
+  path' <- canonicalizePath path
+  return $ (path, ) <$> (tryFilePatterns path' <|> tryDirectoryPatterns path')
+  where
+    tryFilePatterns path =
+      Left <$> find ((== path) . filePatternCompiled) filePatterns
+    tryDirectoryPatterns path =
+      let pathPieces = splitDirectories path
+      in  Right <$> find ((`isPrefixOf` pathPieces) . directoryPatternCompiled) directoryPatterns
 
 --------------------------------------------------------------------------------
 -- Construct GHC Options -------------------------------------------------------
@@ -329,7 +379,7 @@ parseCommandArgs cmd = case fieldSet field 0 cmd [] of
     ParseOk _   out -> Right $ foldMap snd out
     ParseFailed err -> Left $ snd $ locatedErrorMsg err
   where
-    field = optsField liquidHaskellOptions
+    field = optsField liquidHaskellOptionsField
                       (OtherCompiler "LiquidHaskell")
                       id        -- get :: opts -> opts
                       (++)      -- set :: opts -> opts -> opts
