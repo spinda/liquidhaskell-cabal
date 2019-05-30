@@ -225,7 +225,7 @@ myFancyHook :: Args -> BuildFlags -> PackageDescription -> LocalBuildInfo -> IO 
 myFancyHook args buildFlags pkgDesc lbi = do
   {- ... other important code ... -}
   liquidHaskellPostBuildHook args buildFlags pkgDesc lbi
-  {- ... even more code ...-}
+  {- ... even more code ... -}
 ```
 
 ## License
