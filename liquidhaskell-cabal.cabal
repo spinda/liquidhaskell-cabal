@@ -2,7 +2,7 @@ name:                  liquidhaskell-cabal
 version:               0.2.1.0
 synopsis:              Liquid Haskell integration for Cabal and Stack
 description:           Provides support for checking projects using Cabal
-                       and/or stack with LiquidHaskell.
+                       and/or Stack with LiquidHaskell.
 
                        Please see the
                        <https://github.com/spinda/liquidhaskell-cabal/blob/0.2.1.0/README.md README>
