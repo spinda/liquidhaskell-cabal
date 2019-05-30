@@ -187,14 +187,14 @@ verifyComponent verbosity lbi clbi bi desc sources = do
   runProgram verbosity liquid args
 
 getUserArgs :: String -> BuildInfo -> IO [ProgArg]
-getUserArgs desc bi =
-  case lookup liquidHaskellOptionsField (customFieldsBI bi) of
-    Nothing  -> return []
-    Just cmd ->
-      case parseCommandArgs cmd of
-        Right args -> return args
-        Left err   -> dieNoVerbosity $
-          "failed to parse LiquidHaskell options for " ++ desc ++ ": " ++ err
+getUserArgs desc =
+  (concat <$>) . mapM (getUserArgs' desc) . getAllCustomFieldValues liquidHaskellOptionsField
+
+getUserArgs' :: String -> String -> IO [ProgArg]
+getUserArgs' desc cmd = case parseCommandArgs cmd of
+  Right args -> return args
+  Left err -> dieNoVerbosity $
+    "failed to parse LiquidHaskell options for " ++ desc ++ ": " ++ err
 
 --------------------------------------------------------------------------------
 -- Filter Input Sources --------------------------------------------------------
@@ -221,7 +221,7 @@ makeSourceFilter desc bi
   | null paths = return All
   | otherwise = uncurry Whitelist . partitionEithers <$> mapM (makeSourcePattern desc) paths
   where
-    paths = map snd $ filter ((== liquidHaskellVerifyField) . fst) $ customFieldsBI bi
+    paths = getAllCustomFieldValues liquidHaskellVerifyField bi
 
 makeSourcePattern :: String -> FilePath -> IO SourcePattern
 makeSourcePattern desc = tryFilePattern
@@ -369,6 +369,14 @@ getDefaultFlagValue name lbi def = case pkgDescrFile lbi of
     descr <- readGenericPackageDescription silent cabalFile
     let flag = find ((mkFlagName name ==) . flagName) $ genPackageFlags descr
     return $ maybe def flagDefault flag
+
+--------------------------------------------------------------------------------
+-- Cabal Field Handling --------------------------------------------------------
+--------------------------------------------------------------------------------
+
+getAllCustomFieldValues :: String -> BuildInfo -> [String]
+getAllCustomFieldValues field =
+  map snd . filter ((== field) . fst) . customFieldsBI
 
 --------------------------------------------------------------------------------
 -- Splitting Command Line Arguments --------------------------------------------

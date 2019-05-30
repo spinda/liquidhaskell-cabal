@@ -148,6 +148,9 @@ executable or library.
 Extra command line flags to pass to LiquidHaskell (these are described in the
 [LiquidHaskell README](https://github.com/ucsd-progsys/liquidhaskell#command-line-options)).
 
+Multiple `x-liquidhaskell-options` fields may be specified per component. The concatenation of the
+command line flags extracted from each will be passed to LiquidHaskell.
+
 ```
 library
   (... other fields ...)
@@ -156,6 +159,7 @@ library
 executable myexecutable
   (... other fields ...)
   x-liquidhaskell-options: --diff
+  x-liquidhaskell-options: --no-termination
 ```
 
 ### `x-liquidhaskell-verify`
