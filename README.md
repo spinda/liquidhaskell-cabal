@@ -228,3 +228,13 @@ myFancyHook args buildFlags pkgDesc lbi = do
   {- ... even more code ...-}
 ```
 
+## License
+
+Copyright (C) 2016-2019 Michael Smith &lt;michael@spinda.net&gt;
+
+This project is licensed under the [BSD 3-clause license](LICENSE).
+
+### Contribution
+
+Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in
+this work by you shall be licensed as above, without any additional terms or conditions.
