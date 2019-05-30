@@ -1,5 +1,5 @@
 -- | Please see the
--- <https://github.com/spinda/liquidhaskell-cabal/blob/0.2.0.0/README.md README>
+-- <https://github.com/spinda/liquidhaskell-cabal/blob/0.2.1.0/README.md README>
 -- for setup and usage instructions.
 
 {-# LANGUAGE CPP #-}

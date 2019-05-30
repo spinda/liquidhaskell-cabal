@@ -5,7 +5,7 @@ description:           Provides support for checking projects using Cabal
                        and/or stack with LiquidHaskell.
 
                        Please see the
-                       <https://github.com/spinda/liquidhaskell-cabal/blob/0.2.0.0/README.md README>
+                       <https://github.com/spinda/liquidhaskell-cabal/blob/0.2.1.0/README.md README>
                        on GitHub for setup and usage instructions.
 homepage:              https://github.com/spinda/liquidhaskell-cabal#readme
 bug-reports:           https://github.com/spinda/liquidhaskell-cabal/issues

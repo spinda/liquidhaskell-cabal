@@ -42,7 +42,7 @@ example project setup.)*
    ```
    library
      build-depends: {- ... other dependencies ... -}
-                  , liquidhaskell-cabal >= 0.2.0
+                  , liquidhaskell-cabal >= 0.2.1
                     {- ... perhaps more dependencies? ... -}
    ```
 
@@ -51,7 +51,7 @@ example project setup.)*
 
    ```
    custom-setup
-     setup-depends: base, Cabal, liquidhaskell-cabal >= 0.2.0
+     setup-depends: base, Cabal, liquidhaskell-cabal >= 0.2.1
    ```
 
    This tells Cabal to make the `base`, `Cabal`, and `liquidhaskell-cabal`
@@ -93,18 +93,18 @@ example project setup.)*
    `liquidhaskell-cabal` manually to make it available to your `Setup.hs`:
 
    ```
-   $ cabal install liquidhaskell-cabal-0.2.0.0
+   $ cabal install liquidhaskell-cabal-0.2.1.0
    ```
 
 1. If you're building with Stack, add the following to your project's `stack.yaml`:
 
    ```
    extra-deps:
-     - liquidhaskell-cabal-0.2.0.0
+     - liquidhaskell-cabal-0.2.1.0
    ```
 
    (If your `stack.yaml` already has an `extra-deps` list, add
-   `liquidhaskell-cabal-0.2.0.0` to the existing one instead of starting a
+   `liquidhaskell-cabal-0.2.1.0` to the existing one instead of starting a
    second list.)
 
    Then, if you're using a version of Stack prior to 1.4, add the following as well:
@@ -186,10 +186,10 @@ executable myexecutable
 For most projects, the simple `Setup.hs` file given above (using
 `liquidHaskellMain`) should be sufficient. However, for those already using
 custom `Setup.hs` files, the `LiquidHaskell.Cabal` module
-([Haddock](https://hackage.haskell.org/package/liquidhaskell-cabal-0.2.0.0/docs/LiquidHaskell-Cabal.html))
+([Haddock](https://hackage.haskell.org/package/liquidhaskell-cabal-0.2.1.0/docs/LiquidHaskell-Cabal.html))
 provides more granular means of hooking LiquidHaskell into the build process.
 
-[`liquidHaskellHooks`](https://hackage.haskell.org/package/liquidhaskell-cabal-0.2.0.0/docs/LiquidHaskell-Cabal.html#v:liquidHaskellHooks)
+[`liquidHaskellHooks`](https://hackage.haskell.org/package/liquidhaskell-cabal-0.2.1.0/docs/LiquidHaskell-Cabal.html#v:liquidHaskellHooks)
 is a Cabal `UserHooks` structure pre-configured for LiquidHaskell. Using it,
 the basic `Setup.hs` file is equivalent to:
 
@@ -199,7 +199,7 @@ import LiquidHaskell.Cabal
 main = defaultMainWithHooks liquidHaskellHooks
 ```
 
-[`liquidHaskellPostBuildHook`](https://hackage.haskell.org/package/liquidhaskell-cabal-0.2.0.0/docs/LiquidHaskell-Cabal.html#v:liquidHaskellPostBuildHook)
+[`liquidHaskellPostBuildHook`](https://hackage.haskell.org/package/liquidhaskell-cabal-0.2.1.0/docs/LiquidHaskell-Cabal.html#v:liquidHaskellPostBuildHook)
 is the Cabal `postBuild` hook that actually configures and runs LiquidHaskell.
 Using it, the above is equivalent to:
 
