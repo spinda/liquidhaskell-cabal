@@ -31,7 +31,7 @@ example project setup.)*
 
    This hooks LiquidHaskell into your Cabal/Stack-based build.
 
-   (For projects already using a custom `Setup.hs` file, see the section
+   (For projects already using a custom `Setup.hs` file, see the section on
    ["Custom `Setup.hs` Files"](#custom-setuphs-files) below.)
 
 1. Next, it's time to set up your project's .cabal file.
@@ -79,8 +79,8 @@ example project setup.)*
    ```
 
    Each library and executable in your package can optionally specify its own
-   LiquidHaskell flags; see the section on [`x-liquidhaskell-options`](#x-liquidhaskell-options)
-   below for more on that.
+   LiquidHaskell flags and whitelist of source files to verify with LiquidHaskell; see the section
+   on ["Additional `.cabal` Fields"](#additional-cabal-fields) below for more on that.
 
 1. When building, you may see a warning that looks like:
 
